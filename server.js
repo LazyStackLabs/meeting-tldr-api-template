@@ -1,46 +1,33 @@
 const express = require('express');
-const fetch = require('node-fetch');
-require('dotenv').config();
+const bodyParser = require('body-parser');
+const OpenAI = require('openai');
 
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
-app.post('/v1/meeting-tldr', async (req, res) => {
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, //  Matches your Fly secret exactly
+});
+
+app.post('/v1/chat/completions', async (req, res) => {
   try {
-    const { transcript } = req.body;
-    if (!transcript) {
-      return res.status(400).json({ error: 'Missing transcript input' });
-    }
+    const prompt = req.body.prompt;
 
-    const prompt = \`Summarize this meeting transcript in 3 key bullet points with a friendly, professional tone:\n\n\${transcript}\`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: \`Bearer \${process.env.OPENAI_API_KEY}\`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-      }),
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
     });
 
-    const data = await response.json();
-    if (!data.choices) {
-      return res.status(500).json({ error: 'Invalid OpenAI response', data });
-    }
-
-    res.json({
-      summary: data.choices[0].message.content.trim(),
-    });
+    res.json({ response: completion.choices[0].message.content });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('OpenAI error:', err);
+    res.status(500).json({ error: 'Something went wrong with OpenAI.' });
   }
 });
 
-const PORT = process.env.PORT || 3000;
+//  Fly.io requires your app to listen on port 8080
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(\`Server running on port \${PORT}\`);
+  console.log(`Server is listening on port ${PORT}`);
 });
+
